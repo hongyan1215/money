@@ -67,6 +67,12 @@ Possible Intents:
    - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
    - Output: Set intent to HELP.
 
+5. **AUTOFILL RULES**:
+   - If 'item' is missing but 'amount' exists, infer 'item' from context or set it to "Unknown Item".
+   - If 'amount' is missing, do NOT generate a RECORD transaction.
+   - If 'category' is missing, infer it from 'item' or default to "Other".
+   - If 'type' is missing, infer from 'category' (e.g. Salary->income, Food->expense) or default to "expense".
+
 Output Schema (JSON):
 {
   "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "HELP" | "UNKNOWN",
