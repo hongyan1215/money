@@ -45,19 +45,27 @@ export async function POST(req: NextRequest) {
         case 'RECORD':
           if (aiResult.transactions && aiResult.transactions.length > 0) {
             // Validation: Filter out invalid transactions
-            const validTransactions = aiResult.transactions.filter(t => {
-              const isValidDate = !isNaN(new Date(t.date).getTime());
-              return t.item && t.amount && t.category && t.type && isValidDate;
-            });
+            const validTransactions = aiResult.transactions.filter(t => t.item && t.amount && t.category && t.type);
 
             if (validTransactions.length === 0) {
-              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容。請確保包含項目、金額，且時間格式正確。' });
+              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容。請確保包含項目與金額。' });
               break;
             }
 
-            const savedDocs = await Promise.all(validTransactions.map(t => 
-              Transaction.create({ userId, ...t, date: new Date(t.date) })
-            ));
+            const savedDocs = await Promise.all(validTransactions.map(t => {
+              // Robust Date Parsing: If AI date is invalid, fallback to NOW
+              let dateObj = new Date(t.date);
+              if (isNaN(dateObj.getTime())) {
+                console.warn(`Invalid date received from AI: ${t.date}, falling back to current time.`);
+                dateObj = new Date();
+              }
+
+              return Transaction.create({ 
+                userId, 
+                ...t, 
+                date: dateObj 
+              });
+            }));
             
             const summary = savedDocs.map(doc => 
               `${doc.item} $${doc.amount} (${doc.category})`
