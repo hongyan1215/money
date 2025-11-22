@@ -5,7 +5,7 @@ import Transaction from '@/models/Transaction';
 import { parseMessage } from '@/lib/ai';
 import { getTransactionStats, getTransactionList, getTopExpense } from '@/lib/stats';
 import { generatePieChartUrl } from '@/lib/chart';
-import { modifyTransaction } from '@/lib/modify';
+import { modifyTransaction, bulkDeleteTransactions } from '@/lib/modify';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const channelSecret = process.env.LINE_CHANNEL_SECRET!;
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
               labels: stats.breakdown.map(b => b._id),
               data: stats.breakdown.map(b => b.total)
             };
-            const chartUrl = generatePieChartUrl(chartData);
+            const chartUrl = await generatePieChartUrl(chartData);
             
             const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
               `總支出: $${stats.totalExpense}\n` +
@@ -166,6 +166,13 @@ export async function POST(req: NextRequest) {
           }
           break;
 
+        case 'BULK_DELETE':
+          if (aiResult.query) {
+            const resultMsg = await bulkDeleteTransactions(userId, aiResult.query);
+            await client.replyMessage(replyToken, { type: 'text', text: resultMsg });
+          }
+          break;
+
         case 'HELP':
           await client.replyMessage(replyToken, {
             type: 'text',
@@ -188,7 +195,7 @@ export async function POST(req: NextRequest) {
 4. 🔧 **修改與刪除**
    - "刪除上一筆"
    - "Undo"
-   - "把上一筆改成 200 元"
+   - "刪除昨天所有交易" (批量刪除)
 
 5. 🏷️ **查詢分類**
    - "有哪些分類？"
