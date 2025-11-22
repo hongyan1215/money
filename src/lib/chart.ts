@@ -40,7 +40,7 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
       },
       plugins: {
         legend: {
-          position: 'right', // Legend on the right
+          position: 'right',
           labels: {
             boxWidth: 12,
             font: { size: 12 },
@@ -58,18 +58,8 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
             return value > 0 ? '$' + value : '';
           }
         },
-        doughnutlabel: { // Plugin to show text in center
-          labels: [
-            {
-              text: 'Total',
-              font: { size: 16 }
-            },
-            {
-              text: '$' + chartData.data.reduce((a, b) => a + b, 0),
-              font: { size: 20, weight: 'bold' }
-            }
-          ]
-        }
+        // Removed doughnutlabel plugin as it might cause issues with some QuickChart versions
+        // or require specific version parameter. Keeping it simple for reliability.
       }
     }
   };
