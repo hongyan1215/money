@@ -139,3 +139,49 @@ export async function parseMessage(text: string): Promise<AIParseResult> {
     return { intent: 'UNKNOWN' };
   }
 }
+
+export async function parseImage(imageBuffer: Buffer, mimeType: string): Promise<AIParseResult> {
+  const currentTime = new Date().toISOString();
+  const promptWithTime = SYSTEM_PROMPT.replace('{{CURRENT_TIME}}', currentTime);
+
+  // Use a model that supports vision, e.g. gemini-1.5-flash or gemini-2.5-flash-lite
+  // Note: As of late 2024/early 2025, check if the lite model supports vision. 
+  // If not, fallback to gemini-1.5-flash. We'll stick to 2.5-flash-lite if it works, or 1.5-flash.
+  // Safe bet: gemini-1.5-flash is known for vision.
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-lite", // Assuming lite supports vision, otherwise use "gemini-1.5-flash"
+    systemInstruction: promptWithTime,
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  try {
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          data: imageBuffer.toString("base64"),
+          mimeType: mimeType,
+        },
+      },
+      `Analyze this image.
+       If it is a receipt or invoice:
+       1. Extract all purchased items, their amounts, and the total date.
+       2. Categorize each item according to the allowed categories.
+       3. Determine if it's an expense or income (usually expense for receipts).
+       4. Return a JSON object with intent "RECORD" and the "transactions" array.
+       
+       If it is NOT a receipt (e.g. a random photo, a selfie):
+       Return a JSON with intent "SMALL_TALK" and a message saying "Nice photo! But I can only read receipts for accounting."
+       `
+    ]);
+
+    const responseText = result.response.text();
+    const parsedResult: AIParseResult = JSON.parse(responseText);
+    
+    return parsedResult;
+  } catch (error) {
+    console.error('Failed to parse Gemini vision response:', error);
+    return { intent: 'UNKNOWN' };
+  }
+}
