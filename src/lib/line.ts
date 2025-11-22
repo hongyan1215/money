@@ -26,8 +26,8 @@ export async function setupRichMenu(appUrl: string) {
         bounds: { x: 0, y: 0, width: 833, height: 843 },
         action: {
           type: 'message',
-          text: '記帳', // 1. 記帳引導 (Record Guide)
-          label: '記帳',
+          text: 'Dashboard', // 1. Modified: Trigger Dashboard
+          label: '網頁後台',
         },
       },
       {
