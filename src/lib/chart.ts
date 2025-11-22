@@ -3,7 +3,7 @@ interface ChartData {
   data: number[];
 }
 
-export function generatePieChartUrl(chartData: ChartData): string {
+export async function generatePieChartUrl(chartData: ChartData): Promise<string> {
   if (chartData.data.length === 0) return '';
 
   const chartConfig = {
@@ -37,8 +37,30 @@ export function generatePieChartUrl(chartData: ChartData): string {
     }
   };
 
-  const baseUrl = 'https://quickchart.io/chart';
-  const jsonConfig = JSON.stringify(chartConfig);
-  return `${baseUrl}?c=${encodeURIComponent(jsonConfig)}&w=500&h=300`;
+  try {
+    const response = await fetch('https://quickchart.io/chart/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chart: chartConfig,
+        width: 500,
+        height: 300,
+        backgroundColor: 'transparent',
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('QuickChart API Error:', await response.text());
+      return '';
+    }
+
+    const result = await response.json();
+    return result.url; // Returns a short URL
+  } catch (error) {
+    console.error('Failed to generate chart URL:', error);
+    return '';
+  }
 }
 
