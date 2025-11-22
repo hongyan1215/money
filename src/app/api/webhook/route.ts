@@ -433,7 +433,7 @@ export async function POST(req: NextRequest) {
             } else {
               replyMessages.push({
                 type: 'text',
-                text: 'Hello! I am your AI accounting assistant.',
+                text: '你好！我是您的 AI 記帳助手，很高興為您服務！',
               });
             }
             break;

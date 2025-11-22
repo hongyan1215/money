@@ -53,6 +53,8 @@ export interface AIParseResult {
 const SYSTEM_PROMPT = `
 You are a smart accounting assistant. Your job is to understand the user's intent from their natural language message.
 
+**IMPORTANT: All replies and messages MUST be in Traditional Chinese (繁體中文). Never use English in your responses unless the user explicitly asks in English.**
+
 Current Reference Time: {{CURRENT_TIME}}
 
 Possible Intents:
@@ -149,6 +151,7 @@ Rules:
 - Dates must be ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ).
 - If intent is UNKNOWN, try to explain why in a hypothetical "message" field (though strictly return JSON).
 - **Reply Quality**: Always try to provide helpful, friendly, and engaging responses. Use the "insight" field to add value beyond basic information. Be conversational, show personality, and occasionally add light humor or encouragement. Keep insights concise (1-2 sentences) but meaningful.
+- **Language Requirement**: ALL replies, messages, and insights MUST be in Traditional Chinese (繁體中文). Never use English unless the user explicitly communicates in English. This is critical for user experience.
 `;
 
 export async function parseMessage(text: string): Promise<AIParseResult> {
@@ -214,7 +217,7 @@ export async function parseImage(imageBuffer: Buffer, mimeType: string): Promise
        4. Return a JSON object with intent "RECORD" and the "transactions" array.
        
        If it is NOT a receipt (e.g. a random photo, a selfie):
-       Return a JSON with intent "SMALL_TALK" and a message saying "Nice photo! But I can only read receipts for accounting."
+       Return a JSON with intent "SMALL_TALK" and a message in Traditional Chinese saying "照片很漂亮！但我只能讀取發票來記帳哦～"
        `
     ]);
 
@@ -245,24 +248,25 @@ export async function generateIntelligentReply(
 ): Promise<string> {
   const currentTime = new Date().toISOString();
   
-  const replyPrompt = `You are a friendly, intelligent accounting assistant with personality. Generate a conversational, helpful reply based on the following context.
+  const replyPrompt = `你是一個友善、智能的記帳助手，具有個性。根據以下上下文生成對話式、有幫助的回復。
 
-Current Time: ${currentTime}
-Intent: ${intent}
+當前時間: ${currentTime}
+意圖: ${intent}
 
-Context Data:
+上下文數據:
 ${JSON.stringify(data, null, 2)}
 
-Instructions:
-- Be conversational, friendly, and show personality
-- Provide insights, suggestions, or encouragement when relevant
-- Keep the reply concise (2-4 sentences) but meaningful
-- Use emojis sparingly and appropriately
-- If the data shows concerning patterns (e.g., high spending), offer gentle suggestions
-- If the data is positive (e.g., good budget control), give encouragement
-- Be natural and avoid being overly formal
+重要規則:
+- **所有回復必須使用繁體中文，絕對不要使用英文**
+- 要對話式、友善，展現個性
+- 在相關時提供洞察、建議或鼓勵
+- 保持簡潔（2-4 句話）但有意義
+- 適度使用表情符號
+- 如果數據顯示令人擔憂的模式（例如高支出），提供溫和的建議
+- 如果數據是正面的（例如良好的預算控制），給予鼓勵
+- 要自然，避免過於正式
 
-Generate ONLY the reply text (no JSON, no markdown, just plain text).`;
+只生成回復文字（不要 JSON，不要 markdown，只要純文字）。`;
 
   try {
     const model = genAI.getGenerativeModel({
