@@ -126,34 +126,10 @@ export async function POST(req: NextRequest) {
                    replyText += `\n\n${alerts.join('\n')}`;
                 }
 
-                // Try to generate intelligent insight if AI provided one
-                if (aiResult.insight) {
+                // Only add AI insight if it's meaningful and not redundant
+                // Only use insight if AI explicitly provided one (don't auto-generate)
+                if (aiResult.insight && aiResult.insight.trim().length > 0) {
                   replyText += `\n\n${aiResult.insight}`;
-                } else {
-                  // Fallback: Generate intelligent reply with transaction data
-                  try {
-                    const stats = await getTransactionStats(userId, {
-                      startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-                      endDate: new Date().toISOString(),
-                      periodType: 'monthly'
-                    });
-                    const intelligentReply = await generateIntelligentReply('RECORD', {
-                      transactions: saved.map((t: any) => ({
-                        item: t.item,
-                        amount: t.amount,
-                        category: t.category,
-                        type: t.type,
-                        date: t.date.toISOString()
-                      })),
-                      stats
-                    });
-                    if (intelligentReply) {
-                      replyText += `\n\n${intelligentReply}`;
-                    }
-                  } catch (error) {
-                    console.error('Failed to generate intelligent reply for RECORD:', error);
-                    // Continue with base reply
-                  }
                 }
               }
 
