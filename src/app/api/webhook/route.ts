@@ -15,6 +15,42 @@ const client = new Client({
   channelSecret,
 });
 
+// Helper function to check for duplicate transactions
+async function checkDuplicateTransaction(
+  userId: string,
+  transaction: { item: string; amount: number; category: string; type: string; date: Date }
+): Promise<boolean> {
+  // Check for duplicates within the last 5 minutes
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  const duplicate = await Transaction.findOne({
+    userId,
+    item: transaction.item,
+    amount: transaction.amount,
+    category: transaction.category,
+    type: transaction.type,
+    date: {
+      $gte: fiveMinutesAgo,
+      $lte: new Date()
+    }
+  });
+
+  return !!duplicate;
+}
+
+// Track processed image message IDs to prevent duplicate OCR processing
+const processedImageIds = new Set<string>();
+const IMAGE_ID_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clean up old image IDs periodically
+setInterval(() => {
+  // In a production environment, you might want to use Redis or a database
+  // For now, we'll just clear the set periodically (this is a simple in-memory solution)
+  if (processedImageIds.size > 1000) {
+    processedImageIds.clear();
+  }
+}, 10 * 60 * 1000); // Every 10 minutes
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get('x-line-signature');
@@ -44,8 +80,18 @@ export async function POST(req: NextRequest) {
         } 
         // 2. Handle Image Message (OCR)
         else if (event.message.type === 'image') {
+          // Check if this image has already been processed
+          const imageId = event.message.id;
+          if (processedImageIds.has(imageId)) {
+            await client.replyMessage(replyToken, { 
+              type: 'text', 
+              text: '這張圖片已經處理過了，不會重複記錄。' 
+            });
+            return;
+          }
+
           // Get image content
-          const stream = await client.getMessageContent(event.message.id);
+          const stream = await client.getMessageContent(imageId);
           const buffers: Uint8Array[] = [];
           for await (const chunk of stream) {
             buffers.push(chunk);
@@ -54,6 +100,14 @@ export async function POST(req: NextRequest) {
           
           // Pass to AI
           aiResult = await parseImage(buffer, 'image/jpeg'); // Line images are typically JPEG
+          
+          // Mark this image as processed
+          processedImageIds.add(imageId);
+          
+          // Remove from cache after TTL (simple timeout)
+          setTimeout(() => {
+            processedImageIds.delete(imageId);
+          }, IMAGE_ID_CACHE_TTL);
         } else {
           // Ignore other message types
           return;
@@ -71,7 +125,11 @@ export async function POST(req: NextRequest) {
                 break;
               }
 
-              const savedDocs = await Promise.all(validTransactions.map(t => {
+              // Check for duplicates and filter them out
+              const transactionsToSave = [];
+              const duplicateItems: string[] = [];
+
+              for (const t of validTransactions) {
                 // Robust Date Parsing: If AI date is invalid, fallback to NOW
                 let dateObj = new Date(t.date);
                 if (isNaN(dateObj.getTime())) {
@@ -79,21 +137,55 @@ export async function POST(req: NextRequest) {
                   dateObj = new Date();
                 }
 
-                return Transaction.create({ 
-                  userId, 
-                  ...t, 
-                  date: dateObj 
+                const transactionData = {
+                  item: t.item,
+                  amount: t.amount,
+                  category: t.category,
+                  type: t.type,
+                  date: dateObj
+                };
+
+                // Check for duplicates
+                const isDuplicate = await checkDuplicateTransaction(userId, transactionData);
+                if (isDuplicate) {
+                  duplicateItems.push(`${t.item} $${t.amount}`);
+                } else {
+                  transactionsToSave.push(transactionData);
+                }
+              }
+
+              // Save non-duplicate transactions
+              const savedDocs = await Promise.all(
+                transactionsToSave.map(t => Transaction.create({ userId, ...t }))
+              );
+
+              // Build reply message
+              let replyText = '';
+              if (savedDocs.length > 0) {
+                const summary = savedDocs.map(doc => 
+                  `${doc.item} $${doc.amount} (${doc.category})`
+                ).join('\n');
+                replyText = `已為您記下：\n${summary}`;
+              }
+
+              if (duplicateItems.length > 0) {
+                if (replyText) replyText += '\n\n';
+                replyText += `⚠️ 以下項目在最近5分鐘內已記錄過，已自動跳過：\n${duplicateItems.join('\n')}`;
+              }
+
+              if (savedDocs.length === 0 && duplicateItems.length > 0) {
+                // All transactions were duplicates
+                replyText = `所有項目在最近5分鐘內都已記錄過，未重複記錄。\n\n重複項目：\n${duplicateItems.join('\n')}`;
+              }
+
+              if (replyText) {
+                await client.replyMessage(replyToken, {
+                  type: 'text',
+                  text: replyText,
                 });
-              }));
-              
-              const summary = savedDocs.map(doc => 
-                `${doc.item} $${doc.amount} (${doc.category})`
-              ).join('\n');
-              
-              await client.replyMessage(replyToken, {
-                type: 'text',
-                text: `已為您記下：\n${summary}`,
-              });
+              } else {
+                await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
+              }
             } else {
               await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
             }
