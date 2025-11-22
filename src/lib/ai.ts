@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -67,7 +67,14 @@ Possible Intents:
    - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
    - Output: Set intent to HELP.
 
-5. **AUTOFILL RULES**:
+5. **CATEGORY_QUERY**: The user is asking what spending categories are supported.
+   - Example: "有哪些分類？", "What categories?", "分類列表", "種類"
+   - Output: Set intent to HELP (or handle specifically if needed, but HELP usually covers general usage). Actually, let's make a specific intent for clarity: Set intent to CATEGORY_LIST.
+
+Output Schema (JSON):
+{
+  "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "UNKNOWN",
+  "transactions": [ ... ] (Only if intent is RECORD),
    - If 'item' is missing but 'amount' exists, infer 'item' from context or set it to "Unknown Item".
    - If 'amount' is missing, do NOT generate a RECORD transaction.
    - If 'category' is missing, infer it from 'item' or default to "Other".
