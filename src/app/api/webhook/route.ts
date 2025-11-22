@@ -45,10 +45,13 @@ export async function POST(req: NextRequest) {
         case 'RECORD':
           if (aiResult.transactions && aiResult.transactions.length > 0) {
             // Validation: Filter out invalid transactions
-            const validTransactions = aiResult.transactions.filter(t => t.item && t.amount && t.category && t.type);
+            const validTransactions = aiResult.transactions.filter(t => {
+              const isValidDate = !isNaN(new Date(t.date).getTime());
+              return t.item && t.amount && t.category && t.type && isValidDate;
+            });
 
             if (validTransactions.length === 0) {
-              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容，請確保包含項目與金額 (e.g. "午餐 100")。' });
+              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容。請確保包含項目、金額，且時間格式正確。' });
               break;
             }
 
