@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@line/bot-sdk';
 import dbConnect from '@/lib/db';
 import Transaction from '@/models/Transaction';
-import { getTransactionStats } from '@/lib/stats';
+import { getTransactionStats } from '@/lib/transaction';
 import { generatePieChartUrl } from '@/lib/chart';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;

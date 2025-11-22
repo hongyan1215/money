@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, WebhookEvent, validateSignature, FlexMessage } from '@line/bot-sdk';
 import dbConnect from '@/lib/db';
-import Transaction from '@/models/Transaction';
 import { parseMessage, parseImage } from '@/lib/ai';
-import { getTransactionStats, getTransactionList, getTopExpense } from '@/lib/stats';
 import { generatePieChartUrl } from '@/lib/chart';
-import { modifyTransaction, bulkDeleteTransactions } from '@/lib/modify';
+import { 
+  createTransactions, 
+  getTransactionStats, 
+  getTransactionList, 
+  getTopExpense, 
+  modifyTransaction, 
+  bulkDeleteTransactions 
+} from '@/lib/transaction';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const channelSecret = process.env.LINE_CHANNEL_SECRET!;
@@ -14,29 +19,6 @@ const client = new Client({
   channelAccessToken,
   channelSecret,
 });
-
-// Helper function to check for duplicate transactions
-async function checkDuplicateTransaction(
-  userId: string,
-  transaction: { item: string; amount: number; category: string; type: string; date: Date }
-): Promise<boolean> {
-  // Check for duplicates within the last 5 minutes
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-  
-  const duplicate = await Transaction.findOne({
-    userId,
-    item: transaction.item,
-    amount: transaction.amount,
-    category: transaction.category,
-    type: transaction.type,
-    date: {
-      $gte: fiveMinutesAgo,
-      $lte: new Date()
-    }
-  });
-
-  return !!duplicate;
-}
 
 // Track processed image message IDs to prevent duplicate OCR processing
 const processedImageIds = new Set<string>();
@@ -117,75 +99,27 @@ export async function POST(req: NextRequest) {
         switch (aiResult.intent) {
           case 'RECORD':
             if (aiResult.transactions && aiResult.transactions.length > 0) {
-              // Validation: Filter out invalid transactions
-              const validTransactions = aiResult.transactions.filter(t => t.item && t.amount && t.category && t.type);
+              const { saved, duplicates } = await createTransactions(userId, aiResult.transactions);
 
-              if (validTransactions.length === 0) {
-                await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容。請確保包含項目與金額。' });
-                break;
-              }
-
-              // Check for duplicates and filter them out
-              const transactionsToSave = [];
-              const duplicateItems: string[] = [];
-
-              for (const t of validTransactions) {
-                // Robust Date Parsing: If AI date is invalid, fallback to NOW
-                let dateObj = new Date(t.date);
-                if (isNaN(dateObj.getTime())) {
-                  console.warn(`Invalid date received from AI: ${t.date}, falling back to current time.`);
-                  dateObj = new Date();
-                }
-
-                const transactionData = {
-                  item: t.item,
-                  amount: t.amount,
-                  category: t.category,
-                  type: t.type,
-                  date: dateObj
-                };
-
-                // Check for duplicates
-                const isDuplicate = await checkDuplicateTransaction(userId, transactionData);
-                if (isDuplicate) {
-                  duplicateItems.push(`${t.item} $${t.amount}`);
-                } else {
-                  transactionsToSave.push(transactionData);
-                }
-              }
-
-              // Save non-duplicate transactions
-              const savedDocs = await Promise.all(
-                transactionsToSave.map(t => Transaction.create({ userId, ...t }))
-              );
-
-              // Build reply message
+              // Construct reply message
               let replyText = '';
-              if (savedDocs.length > 0) {
-                const summary = savedDocs.map(doc => 
-                  `${doc.item} $${doc.amount} (${doc.category})`
-                ).join('\n');
-                replyText = `已為您記下：\n${summary}`;
+              if (saved.length > 0) {
+                const summary = saved.map((t: any) => `${t.item} $${t.amount} (${t.category})`).join('\n');
+                replyText += `已為您記下：\n${summary}`;
               }
 
-              if (duplicateItems.length > 0) {
+              if (duplicates.length > 0) {
                 if (replyText) replyText += '\n\n';
-                replyText += `⚠️ 以下項目在最近5分鐘內已記錄過，已自動跳過：\n${duplicateItems.join('\n')}`;
+                replyText += `⚠️ 以下項目在最近5分鐘內已記錄過，已自動跳過：\n${duplicates.join('\n')}`;
               }
 
-              if (savedDocs.length === 0 && duplicateItems.length > 0) {
-                // All transactions were duplicates
-                replyText = `所有項目在最近5分鐘內都已記錄過，未重複記錄。\n\n重複項目：\n${duplicateItems.join('\n')}`;
+              if (saved.length === 0 && duplicates.length === 0) {
+                 replyText = '抱歉，我無法識別有效的記帳內容。請確保包含項目與金額。';
+              } else if (saved.length === 0 && duplicates.length > 0) {
+                 replyText = '所有項目在最近5分鐘內都已記錄過，未重複記錄。';
               }
 
-              if (replyText) {
-                await client.replyMessage(replyToken, {
-                  type: 'text',
-                  text: replyText,
-                });
-              } else {
-                await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
-              }
+              await client.replyMessage(replyToken, { type: 'text', text: replyText });
             } else {
               await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
             }
