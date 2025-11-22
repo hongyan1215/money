@@ -50,12 +50,10 @@ export async function parseTransaction(text: string): Promise<TransactionData[]>
             item: { type: SchemaType.STRING },
             amount: { type: SchemaType.NUMBER },
             category: { 
-              type: SchemaType.STRING, 
-              enum: ['Food', 'Transport', 'Entertainment', 'Shopping', 'Bills', 'Salary', 'Other'] 
+              type: SchemaType.STRING,
             },
             type: { 
-              type: SchemaType.STRING, 
-              enum: ['expense', 'income'] 
+              type: SchemaType.STRING,
             },
             date: { type: SchemaType.STRING },
           },
