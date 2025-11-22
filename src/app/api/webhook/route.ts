@@ -225,10 +225,14 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
       console.error('Error processing event:', error);
-      await client.replyMessage(replyToken, {
-        type: 'text',
-        text: '系統發生錯誤，請稍後再試。',
-      });
+      try {
+        await client.replyMessage(replyToken, {
+          type: 'text',
+          text: '系統發生錯誤，請稍後再試。',
+        });
+      } catch (replyError) {
+        console.error('Failed to send error reply:', replyError);
+      }
     }
   }));
 
