@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
           // Check if this image has already been processed
           const imageId = event.message.id;
           if (processedImageIds.has(imageId)) {
+            // Collect reply message and send once at the end
             await client.replyMessage(replyToken, { 
               type: 'text', 
               text: '這張圖片已經處理過了，不會重複記錄。' 
@@ -96,6 +97,9 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Handle Intent (Shared logic for both Text and Image)
+        // Collect reply messages and send once at the end
+        let replyMessages: Array<{ type: 'text'; text: string } | { type: 'image'; originalContentUrl: string; previewImageUrl: string }> = [];
+
         switch (aiResult.intent) {
           case 'RECORD':
             if (aiResult.transactions && aiResult.transactions.length > 0) {
@@ -119,9 +123,9 @@ export async function POST(req: NextRequest) {
                  replyText = '所有項目在最近5分鐘內都已記錄過，未重複記錄。';
               }
 
-              await client.replyMessage(replyToken, { type: 'text', text: replyText });
+              replyMessages.push({ type: 'text', text: replyText });
             } else {
-              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
+              replyMessages.push({ type: 'text', text: '抱歉，我不確定您想記什麼。' });
             }
             break;
 
@@ -130,35 +134,31 @@ export async function POST(req: NextRequest) {
               const stats = await getTransactionStats(userId, aiResult.query);
               
               if (stats.transactionCount === 0) {
-                await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有任何交易紀錄。' });
-                return;
-              }
+                replyMessages.push({ type: 'text', text: '該時段沒有任何交易紀錄。' });
+              } else {
+                const chartData = {
+                  labels: stats.breakdown.map(b => b._id),
+                  data: stats.breakdown.map(b => b.total)
+                };
+                const chartUrl = await generatePieChartUrl(chartData, req.nextUrl.origin);
+                
+                const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
+                  `總支出: $${stats.totalExpense}\n` +
+                  `總收入: $${stats.totalIncome}\n` +
+                  `交易筆數: ${stats.transactionCount}\n\n` +
+                  `前三大支出:\n` +
+                  stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
 
-              const chartData = {
-                labels: stats.breakdown.map(b => b._id),
-                data: stats.breakdown.map(b => b.total)
-              };
-              const chartUrl = await generatePieChartUrl(chartData, req.nextUrl.origin);
-              
-              const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
-                `總支出: $${stats.totalExpense}\n` +
-                `總收入: $${stats.totalIncome}\n` +
-                `交易筆數: ${stats.transactionCount}\n\n` +
-                `前三大支出:\n` +
-                stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
-
-              // Send Text + Image if chart is available
-              if (chartUrl) {
-                await client.replyMessage(replyToken, [
-                  { type: 'text', text: replyText },
-                  { 
+                replyMessages.push({ type: 'text', text: replyText });
+                
+                // Add chart image if available
+                if (chartUrl) {
+                  replyMessages.push({ 
                     type: 'image', 
                     originalContentUrl: chartUrl, 
                     previewImageUrl: chartUrl 
-                  }
-                ]);
-              } else {
-                await client.replyMessage(replyToken, { type: 'text', text: replyText });
+                  });
+                }
               }
             }
             break;
@@ -167,13 +167,13 @@ export async function POST(req: NextRequest) {
             if (aiResult.query) {
               const transactions = await getTransactionList(userId, aiResult.query);
               if (transactions.length === 0) {
-                await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有任何交易紀錄。' });
+                replyMessages.push({ type: 'text', text: '該時段沒有任何交易紀錄。' });
               } else {
                 const listText = transactions.map(t => {
                   const dateStr = new Date(t.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
                   return `${dateStr} ${t.item} $${t.amount} (${t.category})`;
                 }).join('\n');
-                await client.replyMessage(replyToken, { 
+                replyMessages.push({ 
                   type: 'text', 
                   text: `📋 交易明細 (最近20筆):\n${listText}` 
                 });
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
               const topStats = await getTopExpense(userId, aiResult.query);
               
               if (!topStats.topCategory && !topStats.topItem) {
-                await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有支出紀錄。' });
+                replyMessages.push({ type: 'text', text: '該時段沒有支出紀錄。' });
               } else {
                 let reply = `🔥 消費之最 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n\n`;
                 
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
                   reply += `💸 最大筆單次支出: ${topStats.topItem.item} $${topStats.topItem.amount} (${dateStr})`;
                 }
                 
-                await client.replyMessage(replyToken, { type: 'text', text: reply });
+                replyMessages.push({ type: 'text', text: reply });
               }
             }
             break;
@@ -207,19 +207,19 @@ export async function POST(req: NextRequest) {
           case 'MODIFY':
             if (aiResult.modification) {
               const resultMsg = await modifyTransaction(userId, aiResult.modification);
-              await client.replyMessage(replyToken, { type: 'text', text: resultMsg });
+              replyMessages.push({ type: 'text', text: resultMsg });
             }
             break;
 
           case 'BULK_DELETE':
             if (aiResult.query) {
               const resultMsg = await bulkDeleteTransactions(userId, aiResult.query);
-              await client.replyMessage(replyToken, { type: 'text', text: resultMsg });
+              replyMessages.push({ type: 'text', text: resultMsg });
             }
             break;
 
           case 'HELP':
-            await client.replyMessage(replyToken, {
+            replyMessages.push({
               type: 'text',
               text: `🤖 我是您的 AI 記帳助手，我可以幫您：
 
@@ -251,7 +251,7 @@ export async function POST(req: NextRequest) {
             break;
 
           case 'CATEGORY_LIST':
-            await client.replyMessage(replyToken, {
+            replyMessages.push({
               type: 'text',
               text: `📋 支援的自動分類項目：
 
@@ -269,12 +269,12 @@ export async function POST(req: NextRequest) {
 
           case 'SMALL_TALK':
             if (aiResult.message) {
-              await client.replyMessage(replyToken, {
+              replyMessages.push({
                 type: 'text',
                 text: aiResult.message,
               });
             } else {
-              await client.replyMessage(replyToken, {
+              replyMessages.push({
                 type: 'text',
                 text: 'Hello! I am your AI accounting assistant.',
               });
@@ -283,23 +283,25 @@ export async function POST(req: NextRequest) {
 
           case 'UNKNOWN':
           default:
-            await client.replyMessage(replyToken, {
+            replyMessages.push({
               type: 'text',
               text: '抱歉，我不確定您的意思。您可以試著問我：「你有哪些功能？」或直接說：「午餐100」。\n\n💡 您也可以直接傳送發票照片給我！',
             });
             break;
         }
 
+        // Send all reply messages once at the end
+        if (replyMessages.length > 0) {
+          if (replyMessages.length === 1) {
+            await client.replyMessage(replyToken, replyMessages[0]);
+          } else {
+            await client.replyMessage(replyToken, replyMessages);
+          }
+        }
+
       } catch (error) {
         console.error('Error processing event:', error);
-        try {
-          await client.replyMessage(replyToken, {
-            type: 'text',
-            text: '系統發生錯誤，請稍後再試。',
-          });
-        } catch (replyError) {
-          console.error('Failed to send error reply:', replyError);
-        }
+        // Do not send reply in catch block
       }
     }
   }));
