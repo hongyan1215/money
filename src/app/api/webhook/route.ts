@@ -3,7 +3,7 @@ import { Client, WebhookEvent, validateSignature, FlexMessage } from '@line/bot-
 import dbConnect from '@/lib/db';
 import Transaction from '@/models/Transaction';
 import { parseMessage } from '@/lib/ai';
-import { getTransactionStats } from '@/lib/stats';
+import { getTransactionStats, getTransactionList, getTopExpense } from '@/lib/stats';
 import { generatePieChartUrl } from '@/lib/chart';
 import { modifyTransaction } from '@/lib/modify';
 
@@ -107,6 +107,46 @@ export async function POST(req: NextRequest) {
           }
           break;
 
+        case 'LIST_TRANSACTIONS':
+          if (aiResult.query) {
+            const transactions = await getTransactionList(userId, aiResult.query);
+            if (transactions.length === 0) {
+              await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有任何交易紀錄。' });
+            } else {
+              const listText = transactions.map(t => {
+                const dateStr = new Date(t.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+                return `${dateStr} ${t.item} $${t.amount} (${t.category})`;
+              }).join('\n');
+              await client.replyMessage(replyToken, { 
+                type: 'text', 
+                text: `📋 交易明細 (最近20筆):\n${listText}` 
+              });
+            }
+          }
+          break;
+
+        case 'TOP_EXPENSE':
+          if (aiResult.query) {
+            const topStats = await getTopExpense(userId, aiResult.query);
+            
+            if (!topStats.topCategory && !topStats.topItem) {
+              await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有支出紀錄。' });
+            } else {
+              let reply = `🔥 消費之最 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n\n`;
+              
+              if (topStats.topCategory) {
+                reply += `🏆 花費最多的種類: ${topStats.topCategory.category} (共 $${topStats.topCategory.total})\n`;
+              }
+              if (topStats.topItem) {
+                const dateStr = new Date(topStats.topItem.date).toLocaleDateString('zh-TW');
+                reply += `💸 最大筆單次支出: ${topStats.topItem.item} $${topStats.topItem.amount} (${dateStr})`;
+              }
+              
+              await client.replyMessage(replyToken, { type: 'text', text: reply });
+            }
+          }
+          break;
+
         case 'DELETE':
         case 'MODIFY':
           if (aiResult.modification) {
@@ -130,12 +170,16 @@ export async function POST(req: NextRequest) {
    - "上週飲食支出"
    - "今天總支出"
 
-3. 🔧 **修改與刪除**
+3. 🧾 **進階查詢**
+   - "列出上週的所有支出" (查看明細)
+   - "上個月花最多的是什麼？" (消費之最)
+
+4. 🔧 **修改與刪除**
    - "刪除上一筆"
    - "Undo"
    - "把上一筆改成 200 元"
 
-4. 🏷️ **查詢分類**
+5. 🏷️ **查詢分類**
    - "有哪些分類？"
 
 直接跟我聊天即可，我會自動理解您的意思！`,

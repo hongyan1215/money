@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -69,12 +69,15 @@ Possible Intents:
 
 5. **CATEGORY_QUERY**: The user is asking what spending categories are supported.
    - Example: "有哪些分類？", "What categories?", "分類列表", "種類"
-   - Output: Set intent to HELP (or handle specifically if needed, but HELP usually covers general usage). Actually, let's make a specific intent for clarity: Set intent to CATEGORY_LIST.
+6. **LIST_TRANSACTIONS**: The user wants to see a detailed list of every single transaction in a period.
+   - Example: "請列出上週的每一筆支出", "Show me all transactions from yesterday", "明細"
+   - Output: Extract startDate, endDate, category (optional).
 
-Output Schema (JSON):
-{
-  "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "UNKNOWN",
-  "transactions": [ ... ] (Only if intent is RECORD),
+7. **TOP_EXPENSE**: The user wants to know which category or item cost the most.
+   - Example: "上週哪個種類花費最多？", "What was my biggest expense this month?", "最大筆支出"
+   - Output: Extract startDate, endDate.
+
+8. **AUTOFILL RULES**:
    - If 'item' is missing but 'amount' exists, infer 'item' from context or set it to "Unknown Item".
    - If 'amount' is missing, do NOT generate a RECORD transaction.
    - If 'category' is missing, infer it from 'item' or default to "Other".
@@ -82,9 +85,9 @@ Output Schema (JSON):
 
 Output Schema (JSON):
 {
-  "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "HELP" | "UNKNOWN",
+  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
-  "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY),
+  "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY, LIST_TRANSACTIONS, TOP_EXPENSE),
   "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY)
 }
 
