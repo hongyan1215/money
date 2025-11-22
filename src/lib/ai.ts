@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -63,9 +63,13 @@ Possible Intents:
    - Output: Identify the action (DELETE/UPDATE) and details.
      - "Undo" usually means delete the most recent transaction (indexOffset: 0).
 
+4. **HELP**: The user is asking what you can do or how to use the bot.
+   - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
+   - Output: Set intent to HELP.
+
 Output Schema (JSON):
 {
-  "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "UNKNOWN",
+  "intent": "RECORD" | "QUERY" | "DELETE" | "MODIFY" | "HELP" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
   "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY),
   "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY)

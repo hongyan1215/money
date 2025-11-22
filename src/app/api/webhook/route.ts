@@ -107,11 +107,35 @@ export async function POST(req: NextRequest) {
           }
           break;
 
+        case 'HELP':
+          await client.replyMessage(replyToken, {
+            type: 'text',
+            text: `🤖 我是您的 AI 記帳助手，我可以幫您：
+
+1. 📝 **記帳**
+   - "午餐吃牛肉麵 150"
+   - "昨天買飲料 50"
+   - "發薪水 50000"
+
+2. 📊 **查詢統計**
+   - "這個月花了多少？"
+   - "上週飲食支出"
+   - "今天總支出"
+
+3. 🔧 **修改與刪除**
+   - "刪除上一筆"
+   - "Undo"
+   - "把上一筆改成 200 元"
+
+直接跟我聊天即可，我會自動理解您的意思！`,
+          });
+          break;
+
         case 'UNKNOWN':
         default:
           await client.replyMessage(replyToken, {
             type: 'text',
-            text: '抱歉，我不確定您的意思。您可以試著說：「午餐100」、「上週花了多少？」或「刪除上一筆」。',
+            text: '抱歉，我不確定您的意思。您可以試著問我：「你有哪些功能？」或直接說：「午餐100」。',
           });
           break;
       }
