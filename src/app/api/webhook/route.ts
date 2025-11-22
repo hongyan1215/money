@@ -11,6 +11,7 @@ import {
   modifyTransaction, 
   bulkDeleteTransactions 
 } from '@/lib/transaction';
+import { setBudget, getBudgetStatus, checkBudgetAlert } from '@/lib/budget';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const channelSecret = process.env.LINE_CHANNEL_SECRET!;
@@ -110,6 +111,19 @@ export async function POST(req: NextRequest) {
               if (saved.length > 0) {
                 const summary = saved.map((t: any) => `${t.item} $${t.amount} (${t.category})`).join('\n');
                 replyText += `已為您記下：\n${summary}`;
+
+                // Check Budget Alerts for affected categories
+                const affectedCategories = Array.from(new Set(saved.map((t: any) => t.category)));
+                const alerts: string[] = [];
+                
+                for (const category of affectedCategories) {
+                  const alert = await checkBudgetAlert(userId, category);
+                  if (alert) alerts.push(alert);
+                }
+                
+                if (alerts.length > 0) {
+                   replyText += `\n\n${alerts.join('\n')}`;
+                }
               }
 
               if (duplicates.length > 0) {
@@ -202,6 +216,41 @@ export async function POST(req: NextRequest) {
               }
             }
             break;
+          
+          case 'SET_BUDGET':
+            if (aiResult.budget) {
+              const { category, amount } = aiResult.budget;
+              await setBudget(userId, category, amount);
+              replyMessages.push({ 
+                type: 'text', 
+                text: `✅ 已設定預算：\n${category === 'Total' ? '總預算' : category} -> $${amount}/月` 
+              });
+            } else {
+               replyMessages.push({ type: 'text', text: '抱歉，我沒聽清楚您想設定哪個種類的預算。請再試一次，例如：「設定餐飲預算5000」。' });
+            }
+            break;
+
+          case 'CHECK_BUDGET':
+            const budgetStatus = await getBudgetStatus(userId);
+            if (budgetStatus.length === 0) {
+              replyMessages.push({ type: 'text', text: '您目前沒有設定任何預算。您可以說「設定總預算 20000」來開始使用預算功能。' });
+            } else {
+              let statusText = '📉 本月預算使用狀況：\n\n';
+              
+              for (const b of budgetStatus) {
+                const categoryName = b.category === 'Total' ? '總預算' : b.category;
+                const icon = b.isOverBudget ? '⚠️' : (b.percentage >= 80 ? '🚨' : '✅');
+                statusText += `${icon} ${categoryName}: $${b.spent} / $${b.limit} (${b.percentage}%)\n`;
+                if (b.isOverBudget) {
+                  statusText += `   已超支 $${Math.abs(b.remaining)}\n`;
+                } else {
+                  statusText += `   還剩 $${b.remaining}\n`;
+                }
+                statusText += '\n';
+              }
+              replyMessages.push({ type: 'text', text: statusText.trim() });
+            }
+            break;
 
           case 'DELETE':
           case 'MODIFY':
@@ -226,24 +275,27 @@ export async function POST(req: NextRequest) {
 1. 📝 **記帳**
    - "午餐吃牛肉麵 150"
    - "昨天買飲料 50"
-   - "發薪水 50000"
-   - 📸 **傳送發票/收據照片，我也看得懂喔！**
+   - 📸 **傳送發票照片**
 
-2. 📊 **查詢統計**
+2. 💰 **預算管理** (New!)
+   - "設定總預算 20000"
+   - "設定餐飲預算 5000"
+   - "預算剩多少" (查詢狀況)
+
+3. 📊 **查詢統計**
    - "這個月花了多少？"
    - "上週飲食支出"
-   - "今天總支出"
 
-3. 🧾 **進階查詢**
-   - "列出上週的所有支出" (查看明細)
-   - "上個月花最多的是什麼？" (消費之最)
+4. 🧾 **進階查詢**
+   - "列出上週的所有支出"
+   - "上個月花最多的是什麼？"
 
-4. 🔧 **修改與刪除**
+5. 🔧 **修改與刪除**
    - "刪除上一筆"
    - "Undo"
-   - "刪除昨天所有交易" (批量刪除)
+   - "刪除昨天所有交易"
 
-5. 🏷️ **查詢分類**
+6. 🏷️ **查詢分類**
    - "有哪些分類？"
 
 直接跟我聊天即可，我會自動理解您的意思！`,

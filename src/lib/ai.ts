@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'SMALL_TALK' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'SMALL_TALK' | 'SET_BUDGET' | 'CHECK_BUDGET' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -33,11 +33,17 @@ export interface ModificationData {
   newCategory?: string;
 }
 
+export interface BudgetData {
+  category: string; // 'Total' or specific category
+  amount: number;
+}
+
 export interface AIParseResult {
   intent: IntentType;
   transactions?: TransactionData[];
   query?: QueryData;
   modification?: ModificationData;
+  budget?: BudgetData;
   message?: string; // For conversational replies if needed
 }
 
@@ -63,32 +69,43 @@ Possible Intents:
    - Output: Identify the action (DELETE/UPDATE) and details.
      - "Undo" usually means delete the most recent transaction (indexOffset: 0).
 
-8. **BULK_DELETE**: The user wants to delete multiple transactions at once.
+4. **BULK_DELETE**: The user wants to delete multiple transactions at once.
    - Example: "刪除今天所有交易", "Clear all transactions from last week", "Remove everything from yesterday"
    - Output: Extract startDate, endDate. Set intent to BULK_DELETE.
 
-9. **SMALL_TALK**: The user is engaging in casual conversation or greeting.
+5. **SMALL_TALK**: The user is engaging in casual conversation or greeting.
    - Example: "Hello", "Hi", "Who are you?", "Good morning", "Thanks", "你是誰", "你好"
    - Output: Set intent to SMALL_TALK. Generate a friendly, context-aware reply in the "message" field.
      - If greeting: "Hello! I'm your AI accounting assistant. Ready to track some expenses?"
      - If thanks: "You're welcome! Let me know if you need anything else."
      - If identity: "I am an AI Smart Accounting Assistant powered by Gemini. I can help you record, track, and analyze your finances."
 
-10. **HELP**: The user is asking what you can do or how to use the bot.
+6. **HELP**: The user is asking what you can do or how to use the bot.
    - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
    - Output: Set intent to HELP.
 
-5. **CATEGORY_QUERY**: The user is asking what spending categories are supported.
+7. **CATEGORY_QUERY**: The user is asking what spending categories are supported.
    - Example: "有哪些分類？", "What categories?", "分類列表", "種類"
-6. **LIST_TRANSACTIONS**: The user wants to see a detailed list of every single transaction in a period.
+   - Output: Set intent to CATEGORY_LIST.
+
+8. **LIST_TRANSACTIONS**: The user wants to see a detailed list of every single transaction in a period.
    - Example: "請列出上週的每一筆支出", "Show me all transactions from yesterday", "明細"
    - Output: Extract startDate, endDate, category (optional).
 
-7. **TOP_EXPENSE**: The user wants to know which category or item cost the most.
+9. **TOP_EXPENSE**: The user wants to know which category or item cost the most.
    - Example: "上週哪個種類花費最多？", "What was my biggest expense this month?", "最大筆支出"
    - Output: Extract startDate, endDate.
 
-8. **AUTOFILL RULES**:
+10. **SET_BUDGET**: The user wants to set a spending limit for a category or overall.
+    - Example: "設定餐飲預算 5000", "Set monthly budget 20000", "交通預算 2000"
+    - Output: Set intent to SET_BUDGET. Extract category (or 'Total') and amount.
+    - Note: If user says "monthly budget", category is "Total".
+
+11. **CHECK_BUDGET**: The user wants to check their budget status.
+    - Example: "預算剩多少？", "Check status", "我的預算"
+    - Output: Set intent to CHECK_BUDGET.
+
+12. **AUTOFILL RULES**:
    - If 'item' is missing but 'amount' exists, infer 'item' from context or set it to "Unknown Item".
    - If 'amount' is missing, do NOT generate a RECORD transaction.
    - If 'category' is missing, infer it from 'item' or default to "Other".
@@ -96,10 +113,11 @@ Possible Intents:
 
 Output Schema (JSON):
 {
-  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "UNKNOWN",
+  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "SET_BUDGET" | "CHECK_BUDGET" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
   "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY, LIST_TRANSACTIONS, TOP_EXPENSE, BULK_DELETE),
   "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY),
+  "budget": { "category": "...", "amount": ... } (Only if intent is SET_BUDGET),
   "message": "..." (Only if intent is SMALL_TALK or UNKNOWN)
 }
 
