@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
         stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
 
       try {
-        console.log(`Sending push message to ${userId}...`);
+        console.error(`Sending push message to ${userId}...`);
         if (chartUrl) {
           await client.pushMessage(userId, [
             { type: 'text', text: replyText },
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
         } else {
           await client.pushMessage(userId, { type: 'text', text: replyText });
         }
-        console.log(`Successfully sent report to ${userId}`);
+        console.error(`Successfully sent report to ${userId}`);
         return { userId, status: 'sent' };
       } catch (e: any) {
         console.error(`Failed to send report to ${userId}:`, e.originalError || e);
