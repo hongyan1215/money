@@ -9,6 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@line/bot-sdk": "^10.5.0",
+    "dotenv": "^17.2.3",
+    "mongoose": "^9.0.0",
     "next": "16.0.3",
     "react": "19.2.0",
     "react-dom": "19.2.0"
