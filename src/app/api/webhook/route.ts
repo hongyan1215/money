@@ -44,7 +44,15 @@ export async function POST(req: NextRequest) {
       switch (aiResult.intent) {
         case 'RECORD':
           if (aiResult.transactions && aiResult.transactions.length > 0) {
-            const savedDocs = await Promise.all(aiResult.transactions.map(t => 
+            // Validation: Filter out invalid transactions
+            const validTransactions = aiResult.transactions.filter(t => t.item && t.amount && t.category && t.type);
+
+            if (validTransactions.length === 0) {
+              await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我無法識別有效的記帳內容，請確保包含項目與金額 (e.g. "午餐 100")。' });
+              break;
+            }
+
+            const savedDocs = await Promise.all(validTransactions.map(t => 
               Transaction.create({ userId, ...t, date: new Date(t.date) })
             ));
             
