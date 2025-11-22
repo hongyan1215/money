@@ -75,7 +75,13 @@ export async function setupRichMenu(appUrl: string) {
   };
 
   console.log('Creating Rich Menu...');
-  const richMenuId = await client.createRichMenu(richMenu);
+  let richMenuId: string;
+  try {
+    richMenuId = await client.createRichMenu(richMenu);
+  } catch (error: any) {
+    console.error('Failed to create rich menu:', error.response?.data || error.message);
+    throw new Error(`Create Rich Menu Failed: ${JSON.stringify(error.response?.data || error.message)}`);
+  }
   console.log('Rich Menu created:', richMenuId);
 
   // 2. Upload Image
@@ -97,7 +103,14 @@ export async function setupRichMenu(appUrl: string) {
   const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
 
   console.log('Uploading image...');
-  await client.setRichMenuImage(richMenuId, imageBuffer);
+  try {
+    await client.setRichMenuImage(richMenuId, imageBuffer, 'image/jpeg');
+  } catch (error: any) {
+    console.error('Failed to upload rich menu image:', error.response?.data || error.message);
+    // Try to clean up the created menu if image upload fails
+    await client.deleteRichMenu(richMenuId);
+    throw new Error(`Rich Menu Image Upload Failed: ${JSON.stringify(error.response?.data || error.message)}`);
+  }
 
   // 3. Set as Default
   console.log('Setting as default...');
