@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
           case 'DASHBOARD':
             const token = await signMagicLinkToken(userId);
             // The appOrigin is needed. We can use req.nextUrl.origin
-            const dashboardUrl = `${req.nextUrl.origin}/api/auth/callback?token=${token}`;
+            const dashboardUrl = `${req.nextUrl.origin}/auth/callback?token=${token}`;
             
             replyMessages.push({
               type: 'text',
