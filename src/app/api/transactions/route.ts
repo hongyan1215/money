@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const category = searchParams.get('category') || undefined;
+    const search = searchParams.get('search');
 
     // Build query
     const query: any = { userId };
@@ -30,6 +31,10 @@ export async function GET(req: NextRequest) {
     
     if (category && category !== 'All') {
       query.category = category;
+    }
+
+    if (search) {
+      query.item = { $regex: search, $options: 'i' };
     }
 
     const skip = (page - 1) * limit;
