@@ -57,9 +57,7 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
           formatter: (value: any) => {
             return value > 0 ? '$' + value : '';
           }
-        },
-        // Removed doughnutlabel plugin as it might cause issues with some QuickChart versions
-        // or require specific version parameter. Keeping it simple for reliability.
+        }
       }
     }
   };
@@ -75,6 +73,7 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
         width: 500,
         height: 300,
         backgroundColor: 'transparent',
+        format: 'png', // Explicitly request PNG format
       }),
     });
 
