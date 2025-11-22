@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, WebhookEvent, validateSignature, TextMessage } from '@line/bot-sdk';
+import { Client, WebhookEvent, validateSignature, FlexMessage } from '@line/bot-sdk';
 import dbConnect from '@/lib/db';
 import Transaction from '@/models/Transaction';
-import { parseTransaction } from '@/lib/ai';
+import { parseMessage } from '@/lib/ai';
+import { getTransactionStats } from '@/lib/stats';
+import { generatePieChartUrl } from '@/lib/chart';
+import { modifyTransaction } from '@/lib/modify';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const channelSecret = process.env.LINE_CHANNEL_SECRET!;
@@ -13,7 +16,6 @@ const client = new Client({
 });
 
 export async function POST(req: NextRequest) {
-  // 1. Validate Signature
   const body = await req.text();
   const signature = req.headers.get('x-line-signature');
 
@@ -23,11 +25,8 @@ export async function POST(req: NextRequest) {
 
   const { events } = JSON.parse(body) as { events: WebhookEvent[] };
 
-  // 2. Process Events
   await Promise.all(events.map(async (event) => {
-    if (event.type !== 'message' || event.message.type !== 'text') {
-      return;
-    }
+    if (event.type !== 'message' || event.message.type !== 'text') return;
 
     const userId = event.source.userId;
     if (!userId) return;
@@ -36,44 +35,86 @@ export async function POST(req: NextRequest) {
     const replyToken = event.replyToken;
 
     try {
-      // Connect to DB
       await dbConnect();
-
-      // AI Parse
-      // Notify user processing is happening (optional, but good UX if slow)
-      // For now, we just wait.
       
-      const transactions = await parseTransaction(userText);
+      // 1. AI Intent Classification & Parsing
+      const aiResult = await parseMessage(userText);
 
-      if (transactions.length === 0) {
-        await client.replyMessage(replyToken, {
-          type: 'text',
-          text: '抱歉，我無法理解您的記帳內容。請試著說：「午餐 100」',
-        });
-        return;
+      // 2. Handle Intent
+      switch (aiResult.intent) {
+        case 'RECORD':
+          if (aiResult.transactions && aiResult.transactions.length > 0) {
+            const savedDocs = await Promise.all(aiResult.transactions.map(t => 
+              Transaction.create({ userId, ...t, date: new Date(t.date) })
+            ));
+            
+            const summary = savedDocs.map(doc => 
+              `${doc.item} $${doc.amount} (${doc.category})`
+            ).join('\n');
+            
+            await client.replyMessage(replyToken, {
+              type: 'text',
+              text: `已為您記下：\n${summary}`,
+            });
+          } else {
+            await client.replyMessage(replyToken, { type: 'text', text: '抱歉，我不確定您想記什麼。' });
+          }
+          break;
+
+        case 'QUERY':
+          if (aiResult.query) {
+            const stats = await getTransactionStats(userId, aiResult.query);
+            
+            if (stats.transactionCount === 0) {
+              await client.replyMessage(replyToken, { type: 'text', text: '該時段沒有任何交易紀錄。' });
+              return;
+            }
+
+            const chartData = {
+              labels: stats.breakdown.map(b => b._id),
+              data: stats.breakdown.map(b => b.total)
+            };
+            const chartUrl = generatePieChartUrl(chartData);
+            
+            const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
+              `總支出: $${stats.totalExpense}\n` +
+              `總收入: $${stats.totalIncome}\n` +
+              `交易筆數: ${stats.transactionCount}\n\n` +
+              `前三大支出:\n` +
+              stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
+
+            // Send Text + Image if chart is available
+            if (chartUrl) {
+              await client.replyMessage(replyToken, [
+                { type: 'text', text: replyText },
+                { 
+                  type: 'image', 
+                  originalContentUrl: chartUrl, 
+                  previewImageUrl: chartUrl 
+                }
+              ]);
+            } else {
+              await client.replyMessage(replyToken, { type: 'text', text: replyText });
+            }
+          }
+          break;
+
+        case 'DELETE':
+        case 'MODIFY':
+          if (aiResult.modification) {
+            const resultMsg = await modifyTransaction(userId, aiResult.modification);
+            await client.replyMessage(replyToken, { type: 'text', text: resultMsg });
+          }
+          break;
+
+        case 'UNKNOWN':
+        default:
+          await client.replyMessage(replyToken, {
+            type: 'text',
+            text: '抱歉，我不確定您的意思。您可以試著說：「午餐100」、「上週花了多少？」或「刪除上一筆」。',
+          });
+          break;
       }
-
-      // Save to DB
-      const savedDocs = await Promise.all(transactions.map(async (t) => {
-        return Transaction.create({
-          userId,
-          ...t,
-          date: new Date(t.date),
-        });
-      }));
-
-      // Format Reply
-      const summary = savedDocs.map(doc => {
-        const dateStr = new Date(doc.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
-        return `${doc.item} $${doc.amount} (${doc.category})`;
-      }).join('\n');
-
-      const replyText = `已為您記下：\n${summary}`;
-
-      await client.replyMessage(replyToken, {
-        type: 'text',
-        text: replyText,
-      });
 
     } catch (error) {
       console.error('Error processing event:', error);
@@ -86,4 +127,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ status: 'ok' });
 }
-
