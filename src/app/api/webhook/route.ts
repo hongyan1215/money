@@ -221,6 +221,20 @@ export async function POST(req: NextRequest) {
           });
           break;
 
+        case 'SMALL_TALK':
+          if (aiResult.message) {
+            await client.replyMessage(replyToken, {
+              type: 'text',
+              text: aiResult.message,
+            });
+          } else {
+            await client.replyMessage(replyToken, {
+              type: 'text',
+              text: 'Hello! I am your AI accounting assistant.',
+            });
+          }
+          break;
+
         case 'UNKNOWN':
         default:
           await client.replyMessage(replyToken, {

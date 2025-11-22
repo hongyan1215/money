@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'SMALL_TALK' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -67,7 +67,14 @@ Possible Intents:
    - Example: "刪除今天所有交易", "Clear all transactions from last week", "Remove everything from yesterday"
    - Output: Extract startDate, endDate. Set intent to BULK_DELETE.
 
-9. **HELP**: The user is asking what you can do or how to use the bot.
+9. **SMALL_TALK**: The user is engaging in casual conversation or greeting.
+   - Example: "Hello", "Hi", "Who are you?", "Good morning", "Thanks", "你是誰", "你好"
+   - Output: Set intent to SMALL_TALK. Generate a friendly, context-aware reply in the "message" field.
+     - If greeting: "Hello! I'm your AI accounting assistant. Ready to track some expenses?"
+     - If thanks: "You're welcome! Let me know if you need anything else."
+     - If identity: "I am an AI Smart Accounting Assistant powered by Gemini. I can help you record, track, and analyze your finances."
+
+10. **HELP**: The user is asking what you can do or how to use the bot.
    - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
    - Output: Set intent to HELP.
 
@@ -89,10 +96,11 @@ Possible Intents:
 
 Output Schema (JSON):
 {
-  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "UNKNOWN",
+  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
   "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY, LIST_TRANSACTIONS, TOP_EXPENSE, BULK_DELETE),
-  "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY)
+  "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY),
+  "message": "..." (Only if intent is SMALL_TALK or UNKNOWN)
 }
 
 Rules:

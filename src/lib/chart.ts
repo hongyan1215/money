@@ -1,3 +1,4 @@
+
 interface ChartData {
   labels: string[];
   data: number[];
@@ -6,32 +7,68 @@ interface ChartData {
 export async function generatePieChartUrl(chartData: ChartData): Promise<string> {
   if (chartData.data.length === 0) return '';
 
+  // Pastel & Vibrant Color Palette
+  const colors = [
+    '#FF6384', // Red
+    '#36A2EB', // Blue
+    '#FFCE56', // Yellow
+    '#4BC0C0', // Teal
+    '#9966FF', // Purple
+    '#FF9F40', // Orange
+    '#C9CBCF', // Grey
+    '#E7E9ED', // Light Grey
+    '#76A346'  // Green
+  ];
+
   const chartConfig = {
-    type: 'pie',
+    type: 'doughnut', // Changed to Doughnut for modern look
     data: {
       labels: chartData.labels,
       datasets: [{
         data: chartData.data,
-        backgroundColor: [
-          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'
-        ]
+        backgroundColor: colors,
+        borderColor: '#ffffff', // White borders for separation
+        borderWidth: 2
       }]
     },
     options: {
+      title: {
+        display: true,
+        text: 'Spending Breakdown',
+        fontSize: 18,
+        fontColor: '#333'
+      },
       plugins: {
         legend: {
-          position: 'bottom',
+          position: 'right', // Legend on the right
           labels: {
             boxWidth: 12,
-            font: { size: 10 }
+            font: { size: 12 },
+            padding: 15
           }
         },
         datalabels: {
           display: true,
-          color: '#fff',
+          color: '#ffffff',
+          font: {
+            weight: 'bold',
+            size: 14
+          },
           formatter: (value: any) => {
-            return value > 0 ? value : '';
+            return value > 0 ? '$' + value : '';
           }
+        },
+        doughnutlabel: { // Plugin to show text in center
+          labels: [
+            {
+              text: 'Total',
+              font: { size: 16 }
+            },
+            {
+              text: '$' + chartData.data.reduce((a, b) => a + b, 0),
+              font: { size: 20, weight: 'bold' }
+            }
+          ]
         }
       }
     }
@@ -63,4 +100,3 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
     return '';
   }
 }
-
