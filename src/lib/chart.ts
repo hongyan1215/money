@@ -83,7 +83,7 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
     }
 
     const result = await response.json();
-    return result.url; // Returns a short URL
+    return `${result.url}.png`; // Append .png to ensure Line compatibility
   } catch (error) {
     console.error('Failed to generate chart URL:', error);
     return '';
