@@ -59,14 +59,14 @@ export async function GET(req: NextRequest) {
     };
 
     // 3. Generate and Send Report for each user
-    console.log(`Processing weekly reports for ${distinctUsers.length} users...`);
+    console.error(`Processing weekly reports for ${distinctUsers.length} users...`); // Use error for visibility
 
     const results = await Promise.all(distinctUsers.map(async (userId) => {
-      console.log(`Generating report for user: ${userId}`);
+      console.error(`Generating report for user: ${userId}`);
       const stats = await getTransactionStats(userId, queryData);
       
       if (stats.transactionCount === 0) {
-        console.log(`User ${userId} has no transactions. Skipping.`);
+        console.error(`User ${userId} has no transactions in range ${queryData.startDate} to ${queryData.endDate}. Skipping.`);
         return { userId, status: 'skipped' };
       }
 
