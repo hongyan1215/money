@@ -59,10 +59,16 @@ export async function GET(req: NextRequest) {
     };
 
     // 3. Generate and Send Report for each user
+    console.log(`Processing weekly reports for ${distinctUsers.length} users...`);
+
     const results = await Promise.all(distinctUsers.map(async (userId) => {
+      console.log(`Generating report for user: ${userId}`);
       const stats = await getTransactionStats(userId, queryData);
       
-      if (stats.transactionCount === 0) return { userId, status: 'skipped' };
+      if (stats.transactionCount === 0) {
+        console.log(`User ${userId} has no transactions. Skipping.`);
+        return { userId, status: 'skipped' };
+      }
 
       const chartData = {
         labels: stats.breakdown.map(b => b._id),
@@ -78,6 +84,7 @@ export async function GET(req: NextRequest) {
         stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
 
       try {
+        console.log(`Sending push message to ${userId}...`);
         if (chartUrl) {
           await client.pushMessage(userId, [
             { type: 'text', text: replyText },
@@ -90,10 +97,11 @@ export async function GET(req: NextRequest) {
         } else {
           await client.pushMessage(userId, { type: 'text', text: replyText });
         }
+        console.log(`Successfully sent report to ${userId}`);
         return { userId, status: 'sent' };
-      } catch (e) {
-        console.error(`Failed to send report to ${userId}`, e);
-        return { userId, status: 'failed' };
+      } catch (e: any) {
+        console.error(`Failed to send report to ${userId}:`, e.originalError || e);
+        return { userId, status: 'failed', error: e.message };
       }
     }));
 
