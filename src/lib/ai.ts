@@ -7,7 +7,7 @@ if (!process.env.GOOGLE_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // Define Types
-export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'SMALL_TALK' | 'SET_BUDGET' | 'CHECK_BUDGET' | 'UNKNOWN';
+export type IntentType = 'RECORD' | 'QUERY' | 'DELETE' | 'MODIFY' | 'HELP' | 'CATEGORY_LIST' | 'LIST_TRANSACTIONS' | 'TOP_EXPENSE' | 'BULK_DELETE' | 'SMALL_TALK' | 'SET_BUDGET' | 'CHECK_BUDGET' | 'DASHBOARD' | 'UNKNOWN';
 
 export interface TransactionData {
   item: string;
@@ -105,7 +105,11 @@ Possible Intents:
     - Example: "預算剩多少？", "Check status", "我的預算"
     - Output: Set intent to CHECK_BUDGET.
 
-12. **AUTOFILL RULES**:
+12. **DASHBOARD**: The user wants to view the web dashboard or backend interface.
+    - Example: "Dashboard", "後台", "網頁版", "查看報表", "Web"
+    - Output: Set intent to DASHBOARD.
+
+13. **AUTOFILL RULES**:
    - If 'item' is missing but 'amount' exists, infer 'item' from context or set it to "Unknown Item".
    - If 'amount' is missing, do NOT generate a RECORD transaction.
    - If 'category' is missing, infer it from 'item' or default to "Other".
@@ -113,7 +117,7 @@ Possible Intents:
 
 Output Schema (JSON):
 {
-  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "SET_BUDGET" | "CHECK_BUDGET" | "UNKNOWN",
+  "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "SET_BUDGET" | "CHECK_BUDGET" | "DASHBOARD" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
   "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY, LIST_TRANSACTIONS, TOP_EXPENSE, BULK_DELETE),
   "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY),

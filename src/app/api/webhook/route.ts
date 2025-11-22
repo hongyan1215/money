@@ -12,6 +12,7 @@ import {
   bulkDeleteTransactions 
 } from '@/lib/transaction';
 import { setBudget, getBudgetStatus, checkBudgetAlert } from '@/lib/budget';
+import { signMagicLinkToken } from '@/lib/auth';
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const channelSecret = process.env.LINE_CHANNEL_SECRET!;
@@ -252,6 +253,17 @@ export async function POST(req: NextRequest) {
             }
             break;
 
+          case 'DASHBOARD':
+            const token = await signMagicLinkToken(userId);
+            // The appOrigin is needed. We can use req.nextUrl.origin
+            const dashboardUrl = `${req.nextUrl.origin}/api/auth/callback?token=${token}`;
+            
+            replyMessages.push({
+              type: 'text',
+              text: `🖥️ 請點擊以下連結進入後台 (連結 15 分鐘內有效)：\n${dashboardUrl}`,
+            });
+            break;
+
           case 'DELETE':
           case 'MODIFY':
             if (aiResult.modification) {
@@ -277,25 +289,30 @@ export async function POST(req: NextRequest) {
    - "昨天買飲料 50"
    - 📸 **傳送發票照片**
 
-2. 💰 **預算管理** (New!)
+2. 💰 **預算管理**
    - "設定總預算 20000"
    - "設定餐飲預算 5000"
-   - "預算剩多少" (查詢狀況)
+   - "預算剩多少"
 
 3. 📊 **查詢統計**
    - "這個月花了多少？"
    - "上週飲食支出"
 
-4. 🧾 **進階查詢**
+4. 🖥️ **網頁後台** (New!)
+   - "Dashboard"
+   - "後台"
+   - 查看與編輯詳細資料
+
+5. 🧾 **進階查詢**
    - "列出上週的所有支出"
    - "上個月花最多的是什麼？"
 
-5. 🔧 **修改與刪除**
+6. 🔧 **修改與刪除**
    - "刪除上一筆"
    - "Undo"
    - "刪除昨天所有交易"
 
-6. 🏷️ **查詢分類**
+7. 🏷️ **查詢分類**
    - "有哪些分類？"
 
 直接跟我聊天即可，我會自動理解您的意思！`,

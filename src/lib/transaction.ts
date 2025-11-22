@@ -94,6 +94,7 @@ export async function createTransactions(
 
 /**
  * Get spending statistics for a given period.
+ * Optimized: Single aggregation pipeline to reduce database round trips.
  */
 export async function getTransactionStats(
   userId: string,
@@ -111,47 +112,51 @@ export async function getTransactionStats(
     matchStage.category = query.category;
   }
 
-  const totals = await Transaction.aggregate([
+  // Single aggregation pipeline for both totals and breakdown
+  const results = await Transaction.aggregate([
     { $match: matchStage },
     {
-      $group: {
-        _id: '$type',
-        total: { $sum: '$amount' },
-        count: { $sum: 1 },
+      $facet: {
+        totals: [
+          {
+            $group: {
+              _id: '$type',
+              total: { $sum: '$amount' },
+              count: { $sum: 1 },
+            },
+          },
+        ],
+        breakdown: [
+          {
+            $match: { type: 'expense' },
+          },
+          {
+            $group: {
+              _id: '$category',
+              total: { $sum: '$amount' },
+            },
+          },
+          { $sort: { total: -1 } },
+        ],
       },
     },
   ]);
 
+  const result = results[0];
   let totalExpense = 0;
   let totalIncome = 0;
   let transactionCount = 0;
 
-  totals.forEach((t) => {
+  result.totals.forEach((t: any) => {
     if (t._id === 'expense') totalExpense = t.total;
     if (t._id === 'income') totalIncome = t.total;
     transactionCount += t.count;
   });
 
-  const breakdown = await Transaction.aggregate([
-    { 
-      $match: { 
-        ...matchStage, 
-        type: 'expense' 
-      } 
-    },
-    {
-      $group: {
-        _id: '$category',
-        total: { $sum: '$amount' },
-      },
-    },
-    { $sort: { total: -1 } },
-  ]);
-
   return {
     totalExpense,
     totalIncome,
-    breakdown,
+    breakdown: result.breakdown,
     transactionCount,
   };
 }
