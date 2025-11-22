@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, WebhookEvent, validateSignature, FlexMessage } from '@line/bot-sdk';
 import dbConnect from '@/lib/db';
-import { parseMessage, parseImage } from '@/lib/ai';
+import { parseMessage, parseImage, generateIntelligentReply } from '@/lib/ai';
 import { generatePieChartUrl } from '@/lib/chart';
 import { 
   createTransactions, 
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
             if (aiResult.transactions && aiResult.transactions.length > 0) {
               const { saved, duplicates } = await createTransactions(userId, aiResult.transactions);
 
-              // Construct reply message
+              // Construct base reply message
               let replyText = '';
               if (saved.length > 0) {
                 const summary = saved.map((t: any) => `${t.item} $${t.amount} (${t.category})`).join('\n');
@@ -124,6 +124,36 @@ export async function POST(req: NextRequest) {
                 
                 if (alerts.length > 0) {
                    replyText += `\n\n${alerts.join('\n')}`;
+                }
+
+                // Try to generate intelligent insight if AI provided one
+                if (aiResult.insight) {
+                  replyText += `\n\n${aiResult.insight}`;
+                } else {
+                  // Fallback: Generate intelligent reply with transaction data
+                  try {
+                    const stats = await getTransactionStats(userId, {
+                      startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+                      endDate: new Date().toISOString(),
+                      periodType: 'monthly'
+                    });
+                    const intelligentReply = await generateIntelligentReply('RECORD', {
+                      transactions: saved.map((t: any) => ({
+                        item: t.item,
+                        amount: t.amount,
+                        category: t.category,
+                        type: t.type,
+                        date: t.date.toISOString()
+                      })),
+                      stats
+                    });
+                    if (intelligentReply) {
+                      replyText += `\n\n${intelligentReply}`;
+                    }
+                  } catch (error) {
+                    console.error('Failed to generate intelligent reply for RECORD:', error);
+                    // Continue with base reply
+                  }
                 }
               }
 
@@ -157,12 +187,28 @@ export async function POST(req: NextRequest) {
                 };
                 const chartUrl = await generatePieChartUrl(chartData, req.nextUrl.origin);
                 
-                const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
+                let replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
                   `總支出: $${stats.totalExpense}\n` +
                   `總收入: $${stats.totalIncome}\n` +
                   `交易筆數: ${stats.transactionCount}\n\n` +
                   `前三大支出:\n` +
                   stats.breakdown.slice(0, 3).map(b => `- ${b._id}: $${b.total}`).join('\n');
+
+                // Add AI-generated insight if available
+                if (aiResult.insight) {
+                  replyText += `\n\n${aiResult.insight}`;
+                } else {
+                  // Fallback: Generate intelligent reply
+                  try {
+                    const intelligentReply = await generateIntelligentReply('QUERY', { stats });
+                    if (intelligentReply) {
+                      replyText += `\n\n${intelligentReply}`;
+                    }
+                  } catch (error) {
+                    console.error('Failed to generate intelligent reply for QUERY:', error);
+                    // Continue with base reply
+                  }
+                }
 
                 replyMessages.push({ type: 'text', text: replyText });
                 
@@ -188,10 +234,36 @@ export async function POST(req: NextRequest) {
                   const dateStr = new Date(t.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
                   return `${dateStr} ${t.item} $${t.amount} (${t.category})`;
                 }).join('\n');
-                replyMessages.push({ 
-                  type: 'text', 
-                  text: `📋 交易明細 (最近20筆):\n${listText}` 
-                });
+                
+                let replyText = `📋 交易明細 (最近20筆):\n${listText}`;
+                
+                // Add AI-generated insight if available
+                if (aiResult.insight) {
+                  replyText += `\n\n${aiResult.insight}`;
+                } else {
+                  // Fallback: Generate intelligent summary
+                  try {
+                    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                    const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                    const intelligentReply = await generateIntelligentReply('LIST_TRANSACTIONS', {
+                      transactionList: transactions,
+                      stats: {
+                        totalExpense,
+                        totalIncome,
+                        breakdown: [],
+                        transactionCount: transactions.length
+                      }
+                    });
+                    if (intelligentReply) {
+                      replyText += `\n\n${intelligentReply}`;
+                    }
+                  } catch (error) {
+                    console.error('Failed to generate intelligent reply for LIST_TRANSACTIONS:', error);
+                    // Continue with base reply
+                  }
+                }
+                
+                replyMessages.push({ type: 'text', text: replyText });
               }
             }
             break;
@@ -211,6 +283,22 @@ export async function POST(req: NextRequest) {
                 if (topStats.topItem) {
                   const dateStr = new Date(topStats.topItem.date).toLocaleDateString('zh-TW');
                   reply += `💸 最大筆單次支出: ${topStats.topItem.item} $${topStats.topItem.amount} (${dateStr})`;
+                }
+
+                // Add AI-generated insight if available
+                if (aiResult.insight) {
+                  reply += `\n\n${aiResult.insight}`;
+                } else {
+                  // Fallback: Generate intelligent analysis
+                  try {
+                    const intelligentReply = await generateIntelligentReply('TOP_EXPENSE', { topExpense: topStats });
+                    if (intelligentReply) {
+                      reply += `\n\n${intelligentReply}`;
+                    }
+                  } catch (error) {
+                    console.error('Failed to generate intelligent reply for TOP_EXPENSE:', error);
+                    // Continue with base reply
+                  }
                 }
                 
                 replyMessages.push({ type: 'text', text: reply });

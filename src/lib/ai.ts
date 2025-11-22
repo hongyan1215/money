@@ -26,7 +26,9 @@ export interface QueryData {
 
 export interface ModificationData {
   targetOriginalItem?: string; // To help fuzzy match
-  indexOffset?: number; // 0 for last, 1 for second to last...
+  targetItem?: string; // Item name to match (e.g., "午餐", "lunch")
+  targetAmount?: number; // Amount to match (e.g., 150)
+  indexOffset?: number; // 0 for last, 1 for second to last... (only used if targetItem/targetAmount not provided)
   action: 'DELETE' | 'UPDATE';
   newItem?: string;
   newAmount?: number;
@@ -45,6 +47,7 @@ export interface AIParseResult {
   modification?: ModificationData;
   budget?: BudgetData;
   message?: string; // For conversational replies if needed
+  insight?: string; // Optional insight or suggestion for intelligent replies
 }
 
 const SYSTEM_PROMPT = `
@@ -56,6 +59,7 @@ Possible Intents:
 1. **RECORD**: The user wants to record a new expense or income.
    - Example: "Lunch 150", "Taxi 300 yesterday", "Salary 50000"
    - Output: Extract transactions array.
+   - **Reply Style**: After recording, provide a brief, friendly confirmation with optional insights (e.g., "已記下！這個月餐飲支出已達預算的60%，記得控制一下哦～").
 
 2. **QUERY**: The user wants to know about their spending/income stats.
    - Example: "How much did I spend this month?", "Food cost last week?", "Total income today"
@@ -63,11 +67,21 @@ Possible Intents:
    - Logic: 
      - "This month" -> Start: 1st of current month, End: Current time.
      - "Last month" -> Start: 1st of prev month, End: Last day of prev month.
+   - **Reply Style**: Provide data analysis and insights when possible (e.g., "這個月餐飲支出比上個月多了20%，建議控制一下").
 
 3. **DELETE/MODIFY**: The user wants to change or remove a previous record.
-   - Example: "Delete the last record", "Undo", "Change the last lunch to 200"
-   - Output: Identify the action (DELETE/UPDATE) and details.
-     - "Undo" usually means delete the most recent transaction (indexOffset: 0).
+   - **CRITICAL**: Only trigger DELETE/MODIFY intent when the user explicitly requests to delete or modify a transaction. 
+   - **DO NOT** trigger DELETE intent if the user just mentions the word "delete" in casual conversation (e.g., "I want to delete my account" should be SMALL_TALK, not DELETE).
+   - **Explicit delete commands** that should trigger DELETE:
+     - "刪除上一筆" / "Delete the last record" / "Undo" / "撤回上一筆" / "刪除最後一筆"
+     - "刪除午餐那筆" / "Delete the lunch transaction" / "刪除金額150的那筆" / "Delete the 150 transaction"
+   - **Explicit modify commands** that should trigger MODIFY:
+     - "把上一筆改成200" / "Change the last lunch to 200" / "修改午餐那筆為300"
+   - Output: Identify the action (DELETE/UPDATE) and details:
+     - If user specifies an item name (e.g., "刪除午餐那筆"), set targetItem to match that item.
+     - If user specifies an amount (e.g., "刪除金額150的那筆"), set targetAmount to that amount.
+     - If user says "上一筆" / "last one" / "Undo", set indexOffset: 0 (only if no targetItem/targetAmount provided).
+     - Priority: targetItem > targetAmount > indexOffset
 
 4. **BULK_DELETE**: The user wants to delete multiple transactions at once.
    - Example: "刪除今天所有交易", "Clear all transactions from last week", "Remove everything from yesterday"
@@ -75,10 +89,12 @@ Possible Intents:
 
 5. **SMALL_TALK**: The user is engaging in casual conversation or greeting.
    - Example: "Hello", "Hi", "Who are you?", "Good morning", "Thanks", "你是誰", "你好"
-   - Output: Set intent to SMALL_TALK. Generate a friendly, context-aware reply in the "message" field.
-     - If greeting: "Hello! I'm your AI accounting assistant. Ready to track some expenses?"
-     - If thanks: "You're welcome! Let me know if you need anything else."
-     - If identity: "I am an AI Smart Accounting Assistant powered by Gemini. I can help you record, track, and analyze your finances."
+   - **IMPORTANT**: If the user mentions "delete" but is NOT explicitly requesting to delete a transaction (e.g., "I want to delete my account", "Can you delete this app"), treat as SMALL_TALK, not DELETE.
+   - Output: Set intent to SMALL_TALK. Generate a friendly, context-aware, and personalized reply in the "message" field.
+     - If greeting: Be warm and encouraging, maybe add a light joke or motivational message.
+     - If thanks: Show appreciation and offer further help.
+     - If identity: Introduce yourself with personality, mention your capabilities in an engaging way.
+     - **Reply Style**: Be conversational, friendly, and occasionally humorous. Show personality while staying helpful.
 
 6. **HELP**: The user is asking what you can do or how to use the bot.
    - Example: "What can you do?", "Help", "Show me features", "指令", "功能"
@@ -91,10 +107,12 @@ Possible Intents:
 8. **LIST_TRANSACTIONS**: The user wants to see a detailed list of every single transaction in a period.
    - Example: "請列出上週的每一筆支出", "Show me all transactions from yesterday", "明細"
    - Output: Extract startDate, endDate, category (optional).
+   - **Reply Style**: After listing transactions, provide a brief summary or insight (e.g., "共列出10筆交易，總計支出$5000，其中餐飲類佔了40%") in the "insight" field.
 
 9. **TOP_EXPENSE**: The user wants to know which category or item cost the most.
    - Example: "上週哪個種類花費最多？", "What was my biggest expense this month?", "最大筆支出"
    - Output: Extract startDate, endDate.
+   - **Reply Style**: Provide detailed analysis and suggestions (e.g., "餐飲類是最大支出，建議可以考慮自己帶便當來節省開支") in the "insight" field.
 
 10. **SET_BUDGET**: The user wants to set a spending limit for a category or overall.
     - Example: "設定餐飲預算 5000", "Set monthly budget 20000", "交通預算 2000"
@@ -120,15 +138,17 @@ Output Schema (JSON):
   "intent": "RECORD" | "QUERY" | "LIST_TRANSACTIONS" | "TOP_EXPENSE" | "DELETE" | "MODIFY" | "HELP" | "CATEGORY_LIST" | "BULK_DELETE" | "SMALL_TALK" | "SET_BUDGET" | "CHECK_BUDGET" | "DASHBOARD" | "UNKNOWN",
   "transactions": [ ... ] (Only if intent is RECORD),
   "query": { "startDate": "...", "endDate": "...", "periodType": "...", "category": "..." } (Only if intent is QUERY, LIST_TRANSACTIONS, TOP_EXPENSE, BULK_DELETE),
-  "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "newAmount": ... } (Only if intent is DELETE/MODIFY),
+  "modification": { "action": "...", "indexOffset": 0, "targetOriginalItem": "...", "targetItem": "...", "targetAmount": ..., "newAmount": ... } (Only if intent is DELETE/MODIFY),
   "budget": { "category": "...", "amount": ... } (Only if intent is SET_BUDGET),
-  "message": "..." (Only if intent is SMALL_TALK or UNKNOWN)
+  "message": "..." (Only if intent is SMALL_TALK or UNKNOWN),
+  "insight": "..." (Optional: Additional insights, suggestions, or analysis for RECORD, QUERY, LIST_TRANSACTIONS, TOP_EXPENSE, etc. Be conversational, helpful, and occasionally humorous.)
 }
 
 Rules:
 - For categories, allowed values: ['Food', 'Transport', 'Entertainment', 'Shopping', 'Bills', 'Salary', 'Other'].
 - Dates must be ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ).
 - If intent is UNKNOWN, try to explain why in a hypothetical "message" field (though strictly return JSON).
+- **Reply Quality**: Always try to provide helpful, friendly, and engaging responses. Use the "insight" field to add value beyond basic information. Be conversational, show personality, and occasionally add light humor or encouragement. Keep insights concise (1-2 sentences) but meaningful.
 `;
 
 export async function parseMessage(text: string): Promise<AIParseResult> {
@@ -205,5 +225,61 @@ export async function parseImage(imageBuffer: Buffer, mimeType: string): Promise
   } catch (error) {
     console.error('Failed to parse Gemini vision response:', error);
     return { intent: 'UNKNOWN' };
+  }
+}
+
+/**
+ * Generate an intelligent, conversational reply based on intent and data.
+ * This function enhances the basic response with insights, suggestions, and personality.
+ */
+export async function generateIntelligentReply(
+  intent: IntentType,
+  data: {
+    transactions?: TransactionData[];
+    stats?: { totalExpense: number; totalIncome: number; breakdown: { _id: string; total: number }[]; transactionCount: number };
+    transactionList?: { item: string; amount: number; category: string; date: Date }[];
+    topExpense?: { topCategory: { category: string; total: number } | null; topItem: { item: string; amount: number; date: Date } | null };
+    budgetStatus?: any[];
+    [key: string]: any;
+  }
+): Promise<string> {
+  const currentTime = new Date().toISOString();
+  
+  const replyPrompt = `You are a friendly, intelligent accounting assistant with personality. Generate a conversational, helpful reply based on the following context.
+
+Current Time: ${currentTime}
+Intent: ${intent}
+
+Context Data:
+${JSON.stringify(data, null, 2)}
+
+Instructions:
+- Be conversational, friendly, and show personality
+- Provide insights, suggestions, or encouragement when relevant
+- Keep the reply concise (2-4 sentences) but meaningful
+- Use emojis sparingly and appropriately
+- If the data shows concerning patterns (e.g., high spending), offer gentle suggestions
+- If the data is positive (e.g., good budget control), give encouragement
+- Be natural and avoid being overly formal
+
+Generate ONLY the reply text (no JSON, no markdown, just plain text).`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-lite",
+      generationConfig: {
+        temperature: 0.7, // Slightly higher for more personality
+        maxOutputTokens: 200, // Keep it concise
+      },
+    });
+
+    const result = await model.generateContent(replyPrompt);
+    const replyText = result.response.text().trim();
+    
+    return replyText;
+  } catch (error) {
+    console.error('Failed to generate intelligent reply:', error);
+    // Return empty string to fall back to default reply
+    return '';
   }
 }

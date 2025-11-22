@@ -24,3 +24,4 @@ const Budget: Model<IBudget> = mongoose.models.Budget || mongoose.model<IBudget>
 
 export default Budget;
 
+
