@@ -35,9 +35,9 @@ Rules:
 export async function parseTransaction(text: string): Promise<TransactionData[]> {
   const currentTime = new Date().toISOString();
   
-  // Using gemini-2.5-flash-preview as requested
+  // Using gemini-2.5-flash-lite as requested
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-preview",
+    model: "gemini-2.5-flash-lite",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
