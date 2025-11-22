@@ -4,7 +4,7 @@ interface ChartData {
   data: number[];
 }
 
-export async function generatePieChartUrl(chartData: ChartData): Promise<string> {
+export async function generatePieChartUrl(chartData: ChartData, baseUrl?: string): Promise<string> {
   if (chartData.data.length === 0) return '';
 
   // Pastel & Vibrant Color Palette
@@ -83,7 +83,19 @@ export async function generatePieChartUrl(chartData: ChartData): Promise<string>
     }
 
     const result = await response.json();
-    return `${result.url}.png`; // Append .png to ensure Line compatibility
+    const shortUrl = result.url; // e.g. https://quickchart.io/chart/render/zf-xxxx
+    
+    if (baseUrl) {
+      const chartId = shortUrl.split('/').pop();
+      if (chartId) {
+        // Use local proxy to satisfy Line's .png extension requirement
+        // This hits /chart/:id.png which rewrites to QuickChart
+        return `${baseUrl}/chart/${chartId}.png`;
+      }
+    }
+
+    // Fallback: Try query param trick if no baseUrl provided
+    return `${shortUrl}?open=.png`; 
   } catch (error) {
     console.error('Failed to generate chart URL:', error);
     return '';

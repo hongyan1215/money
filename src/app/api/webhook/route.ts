@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
               labels: stats.breakdown.map(b => b._id),
               data: stats.breakdown.map(b => b.total)
             };
-            const chartUrl = await generatePieChartUrl(chartData);
+            const chartUrl = await generatePieChartUrl(chartData, req.nextUrl.origin);
             
             const replyText = `📊 統計結果 (${aiResult.query.startDate.split('T')[0]} ~ ${aiResult.query.endDate.split('T')[0]})\n` +
               `總支出: $${stats.totalExpense}\n` +

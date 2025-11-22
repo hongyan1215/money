@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
         labels: stats.breakdown.map(b => b._id),
         data: stats.breakdown.map(b => b.total)
       };
-      const chartUrl = await generatePieChartUrl(chartData);
+      const chartUrl = await generatePieChartUrl(chartData, req.nextUrl.origin);
       
       const replyText = `📅 上週消費週報\n(${lastWeekStart.toLocaleDateString('zh-TW')} ~ ${lastWeekEnd.toLocaleDateString('zh-TW')})\n\n` +
         `💰 總支出: $${stats.totalExpense}\n` +
