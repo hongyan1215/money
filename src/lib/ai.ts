@@ -35,10 +35,9 @@ Rules:
 export async function parseTransaction(text: string): Promise<TransactionData[]> {
   const currentTime = new Date().toISOString();
   
-  // Using gemini-1.5-flash as requested (closest valid model to "gemini-2.5-flash-lite")
-  // You can change this to 'gemini-2.0-flash-exp' if available to your key
+  // Using gemini-2.5-flash-preview as requested
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-preview",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
