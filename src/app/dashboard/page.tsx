@@ -12,11 +12,14 @@ import {
   Title,
 } from 'chart.js';
 import { Toaster, toast } from 'react-hot-toast';
+import { Globe } from 'lucide-react';
 
 import StatCards from '@/components/dashboard/StatCards';
 import FilterBar from '@/components/dashboard/FilterBar';
 import ChartSection from '@/components/dashboard/ChartSection';
 import TransactionList, { Transaction } from '@/components/dashboard/TransactionList';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Button } from '@/components/ui/Button';
 
 ChartJS.register(
   ArcElement,
@@ -35,6 +38,7 @@ interface Stats {
 }
 
 export default function Dashboard() {
+  const { language, setLanguage, t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,7 +128,7 @@ export default function Dashboard() {
 
     } catch (error) {
       console.error('Failed to fetch transactions', error);
-      toast.error('Failed to load transactions');
+      toast.error(t.dashboard.loadFailed);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -176,29 +180,29 @@ export default function Dashboard() {
         prev.map((t) => (t._id === id ? updatedTransaction : t))
       );
       
-      toast.success('Transaction updated');
+      toast.success(t.dashboard.transactionUpdated);
       fetchStats(); // Refresh stats
     } catch (error) {
       console.error(error);
-      toast.error('Failed to update transaction');
+      toast.error(t.dashboard.updateFailed);
     }
-  }, [fetchStats]);
+  }, [fetchStats, t]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    if (!confirm(t.dashboard.deleteConfirm)) return;
     
     try {
       const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
       
       setTransactions((prev) => prev.filter((t) => t._id !== id));
-      toast.success('Transaction deleted');
+      toast.success(t.dashboard.transactionDeleted);
       fetchStats(); // Refresh stats
     } catch (error) {
       console.error(error);
-      toast.error('Failed to delete transaction');
+      toast.error(t.dashboard.deleteFailed);
     }
-  }, [fetchStats]);
+  }, [fetchStats, t]);
 
   // Memoized Chart Data
   const chartData = useMemo(() => ({
@@ -224,8 +228,19 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <Toaster position="top-right" />
       <div className="max-w-5xl mx-auto">
-        <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Accounting Dashboard</h1>
+        <header className="mb-6 flex justify-between items-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">{t.dashboard.title}</h1>
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-gray-500" />
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as 'zh-TW' | 'en')}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="zh-TW">繁體中文</option>
+              <option value="en">English</option>
+            </select>
+          </div>
         </header>
 
         {/* Filters */}

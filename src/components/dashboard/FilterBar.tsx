@@ -1,6 +1,7 @@
 import React from 'react';
 import { Input } from '@/components/ui/Input';
 import { Search } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface FilterBarProps {
   startDate: string;
@@ -19,12 +20,13 @@ export default function FilterBar({
   searchTerm,
   onSearchTermChange,
 }: FilterBarProps) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 rounded-lg shadow-sm border">
       <div className="flex-1 relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
         <Input
-          placeholder="Search transactions..."
+          placeholder={t.dashboard.searchPlaceholder}
           value={searchTerm}
           onChange={(e) => onSearchTermChange(e.target.value)}
           className="pl-10"
@@ -38,7 +40,7 @@ export default function FilterBar({
           onChange={(e) => onStartDateChange(e.target.value)}
           className="w-full md:w-auto"
         />
-        <span className="text-gray-500">to</span>
+        <span className="text-gray-500">{t.dashboard.dateTo}</span>
         <Input
           type="date"
           value={endDate}

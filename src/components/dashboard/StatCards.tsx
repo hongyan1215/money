@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Stats {
   totalExpense: number;
@@ -13,6 +14,7 @@ interface StatCardsProps {
 }
 
 export default function StatCards({ stats, loading }: StatCardsProps) {
+  const { t } = useLanguage();
   const netBalance = (stats?.totalIncome || 0) - (stats?.totalExpense || 0);
 
   if (loading) {
@@ -30,7 +32,7 @@ export default function StatCards({ stats, loading }: StatCardsProps) {
       <Card className="border-l-4 border-l-red-500">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-gray-500">
-            Total Expense
+            {t.dashboard.totalExpense}
           </CardTitle>
           <TrendingDown className="h-4 w-4 text-red-500" />
         </CardHeader>
@@ -44,7 +46,7 @@ export default function StatCards({ stats, loading }: StatCardsProps) {
       <Card className="border-l-4 border-l-green-500">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-gray-500">
-            Total Income
+            {t.dashboard.totalIncome}
           </CardTitle>
           <TrendingUp className="h-4 w-4 text-green-500" />
         </CardHeader>
@@ -58,7 +60,7 @@ export default function StatCards({ stats, loading }: StatCardsProps) {
       <Card className="border-l-4 border-l-blue-500">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-gray-500">
-            Net Balance
+            {t.dashboard.netBalance}
           </CardTitle>
           <DollarSign className="h-4 w-4 text-blue-500" />
         </CardHeader>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ChartData } from 'chart.js';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ChartSectionProps {
   chartData: ChartData<'doughnut'>;
@@ -10,10 +11,11 @@ interface ChartSectionProps {
 }
 
 export default function ChartSection({ chartData, loading, hasData }: ChartSectionProps) {
+  const { t } = useLanguage();
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle className="text-lg">Expenses by Category</CardTitle>
+        <CardTitle className="text-lg">{t.dashboard.expensesByCategory}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="relative h-64 w-full flex items-center justify-center">
@@ -32,7 +34,7 @@ export default function ChartSection({ chartData, loading, hasData }: ChartSecti
               }} 
             />
           ) : (
-            <div className="text-gray-400">No expense data</div>
+            <div className="text-gray-400">{t.dashboard.noExpenseData}</div>
           )}
         </div>
       </CardContent>
